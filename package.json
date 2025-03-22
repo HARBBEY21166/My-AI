@@ -19,6 +19,7 @@
     "cors": "^2.8.5",
     "expo": "^52.0.40",
     "expo-location": "^18.0.8",
+    "expo-secure-store": "^14.0.1",
     "expo-status-bar": "^2.0.1",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
