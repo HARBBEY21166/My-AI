@@ -4,16 +4,20 @@ import { Text, Title, Subheading, Button, Surface, Divider, List, RadioButton } 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { RideContext } from '../context/RideContext';
+import { AuthContext } from '../context/AuthContext';
 import LoadingOverlay from '../components/LoadingOverlay';
+import StripePayment from '../components/StripePayment';
 
 const PaymentScreen = ({ navigation, route }) => {
   const { rideId, driver, origin, destination } = route.params;
   const { processPayment, getRideDetails } = useContext(RideContext);
+  const { authState } = useContext(AuthContext);
   
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [rideDetails, setRideDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showStripeForm, setShowStripeForm] = useState(false);
   
   // Get ride details
   useEffect(() => {
@@ -32,12 +36,12 @@ const PaymentScreen = ({ navigation, route }) => {
     fetchRideDetails();
   }, [rideId]);
   
-  const handlePayment = async () => {
+  const handleCashPayment = async () => {
     setIsProcessing(true);
     
     try {
       await processPayment(rideId, {
-        method: paymentMethod,
+        method: 'cash',
         amount: rideDetails.fare
       });
       
@@ -54,6 +58,25 @@ const PaymentScreen = ({ navigation, route }) => {
       setIsProcessing(false);
       Alert.alert('Payment Failed', 'There was an error processing your payment. Please try again.');
     }
+  };
+  
+  const handlePayButtonClick = () => {
+    if (paymentMethod === 'card') {
+      setShowStripeForm(true);
+    } else {
+      handleCashPayment();
+    }
+  };
+  
+  const handleCardPaymentSuccess = (paymentIntent) => {
+    // Navigate to rating screen after successful payment
+    navigation.replace('Rating', {
+      rideId,
+      driver,
+      origin,
+      destination,
+      fare: rideDetails.fare
+    });
   };
   
   const handleAddTip = (tipPercentage) => {
@@ -190,41 +213,62 @@ const PaymentScreen = ({ navigation, route }) => {
           </View>
         </Surface>
         
-        <Surface style={styles.paymentMethodContainer}>
-          <Subheading style={styles.sectionTitle}>Payment Method</Subheading>
-          
-          <RadioButton.Group 
-            onValueChange={value => setPaymentMethod(value)} 
-            value={paymentMethod}
-          >
-            <List.Item
-              title="Credit Card"
-              description="**** **** **** 1234"
-              left={() => <List.Icon icon="credit-card" />}
-              right={() => <RadioButton value="card" color="#4A80F0" />}
-              onPress={() => setPaymentMethod('card')}
+        {showStripeForm ? (
+          <Surface style={styles.stripeContainer}>
+            <Subheading style={styles.sectionTitle}>Payment Details</Subheading>
+            <StripePayment 
+              amount={rideDetails.fare}
+              rideId={rideId}
+              onSuccess={handleCardPaymentSuccess}
+              token={authState.token}
             />
+            <Button
+              mode="outlined"
+              style={styles.backButton}
+              onPress={() => setShowStripeForm(false)}
+            >
+              Back to Payment Options
+            </Button>
+          </Surface>
+        ) : (
+          <>
+            <Surface style={styles.paymentMethodContainer}>
+              <Subheading style={styles.sectionTitle}>Payment Method</Subheading>
+              
+              <RadioButton.Group 
+                onValueChange={value => setPaymentMethod(value)} 
+                value={paymentMethod}
+              >
+                <List.Item
+                  title="Credit Card"
+                  description="Pay securely via Stripe"
+                  left={() => <List.Icon icon="credit-card" />}
+                  right={() => <RadioButton value="card" color="#4A80F0" />}
+                  onPress={() => setPaymentMethod('card')}
+                />
+                
+                <Divider />
+                
+                <List.Item
+                  title="Cash"
+                  description="Pay directly to driver"
+                  left={() => <List.Icon icon="cash" />}
+                  right={() => <RadioButton value="cash" color="#4A80F0" />}
+                  onPress={() => setPaymentMethod('cash')}
+                />
+              </RadioButton.Group>
+            </Surface>
             
-            <Divider />
-            
-            <List.Item
-              title="Cash"
-              description="Pay directly to driver"
-              left={() => <List.Icon icon="cash" />}
-              right={() => <RadioButton value="cash" color="#4A80F0" />}
-              onPress={() => setPaymentMethod('cash')}
-            />
-          </RadioButton.Group>
-        </Surface>
-        
-        <Button
-          mode="contained"
-          style={styles.payButton}
-          labelStyle={styles.payButtonLabel}
-          onPress={handlePayment}
-        >
-          {paymentMethod === 'card' ? 'Pay Now' : 'Confirm Cash Payment'}
-        </Button>
+            <Button
+              mode="contained"
+              style={styles.payButton}
+              labelStyle={styles.payButtonLabel}
+              onPress={handlePayButtonClick}
+            >
+              {paymentMethod === 'card' ? 'Continue to Card Payment' : 'Confirm Cash Payment'}
+            </Button>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

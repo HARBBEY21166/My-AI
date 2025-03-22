@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_URL } from '../utils/constants';
+import supabase from '../utils/supabaseClient';
 
 // Create an axios instance for auth API calls
 const authInstance = axios.create({
@@ -24,93 +25,201 @@ const handleApiError = (error) => {
   }
 };
 
+// Handle Supabase errors
+const handleSupabaseError = (error) => {
+  if (error.message) {
+    throw new Error(error.message);
+  } else {
+    throw new Error('An error occurred with authentication');
+  }
+};
+
 export const authApi = {
-  // Register a new user
+  // Register a new user with Supabase
   register: async (name, email, phone, password) => {
     try {
-      const response = await authInstance.post('/register', {
-        name,
+      // Register the user with Supabase
+      const { data: authData, error } = await supabase.auth.signUp({
         email,
-        phone,
         password,
+        options: {
+          data: {
+            name,
+            phone,
+          },
+        },
       });
-      return response.data;
+
+      if (error) {
+        handleSupabaseError(error);
+      }
+
+      // Get the session data
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error('Registration successful, but please check your email to confirm your account');
+      }
+
+      // Format the response to match our app's expected format
+      return {
+        token: session.access_token,
+        user: {
+          id: authData.user.id,
+          email: authData.user.email,
+          name: authData.user.user_metadata.name,
+          phone: authData.user.user_metadata.phone,
+          createdAt: authData.user.created_at,
+        },
+      };
     } catch (error) {
-      handleApiError(error);
+      handleSupabaseError(error);
     }
   },
 
-  // Login a user
+  // Login a user with Supabase
   login: async (email, password) => {
     try {
-      const response = await authInstance.post('/login', {
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-      return response.data;
+
+      if (error) {
+        handleSupabaseError(error);
+      }
+
+      // Format the response to match our app's expected format
+      return {
+        token: data.session.access_token,
+        user: {
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.user_metadata.name,
+          phone: data.user.user_metadata.phone,
+          createdAt: data.user.created_at,
+        },
+      };
     } catch (error) {
-      handleApiError(error);
+      handleSupabaseError(error);
     }
   },
 
-  // Verify token validity
+  // Verify token validity with Supabase
   verifyToken: async (token) => {
     try {
-      const response = await authInstance.get('/verify', {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const { data, error } = await supabase.auth.getUser(token);
+
+      if (error) {
+        handleSupabaseError(error);
+      }
+
+      return {
+        verified: true,
+        user: {
+          id: data.user.id,
+          email: data.user.email,
         },
-      });
-      return response.data;
+      };
     } catch (error) {
-      handleApiError(error);
+      handleSupabaseError(error);
     }
   },
 
-  // Update user profile
+  // Update user profile with Supabase
   updateProfile: async (token, userData) => {
     try {
-      const response = await authInstance.put('/profile', userData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const { data, error } = await supabase.auth.updateUser({
+        data: {
+          name: userData.name,
+          phone: userData.phone,
         },
       });
-      return response.data;
+
+      if (error) {
+        handleSupabaseError(error);
+      }
+
+      return {
+        user: {
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.user_metadata.name,
+          phone: data.user.user_metadata.phone,
+          updatedAt: new Date().toISOString(),
+        },
+      };
     } catch (error) {
-      handleApiError(error);
+      handleSupabaseError(error);
     }
   },
 
-  // Reset password
+  // Reset password with Supabase
   resetPassword: async (email) => {
     try {
-      const response = await authInstance.post('/reset-password', {
-        email,
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
       });
-      return response.data;
+
+      if (error) {
+        handleSupabaseError(error);
+      }
+
+      return {
+        message: 'If your email is registered, you will receive a password reset link',
+      };
     } catch (error) {
-      handleApiError(error);
+      handleSupabaseError(error);
     }
   },
 
-  // Change password
+  // Sign out with Supabase
+  signOut: async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        handleSupabaseError(error);
+      }
+      
+      return { success: true };
+    } catch (error) {
+      handleSupabaseError(error);
+    }
+  },
+
+  // Change password with Supabase
   changePassword: async (token, currentPassword, newPassword) => {
     try {
-      const response = await authInstance.post(
-        '/change-password',
-        {
-          currentPassword,
-          newPassword,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      return response.data;
+      // Supabase requires re-authentication before changing password
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      
+      if (authError) {
+        handleSupabaseError(authError);
+      }
+      
+      // Re-authenticate with current password
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+      
+      if (signInError) {
+        throw new Error('Current password is incorrect');
+      }
+      
+      // Update the password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      
+      if (updateError) {
+        handleSupabaseError(updateError);
+      }
+      
+      return { message: 'Password changed successfully' };
     } catch (error) {
-      handleApiError(error);
+      handleSupabaseError(error);
     }
   },
 };

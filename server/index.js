@@ -15,8 +15,15 @@ const PORT = process.env.PORT || 8000;
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// For regular routes use JSON body parser
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/payments/webhook') {
+    next(); // Skip body parsing for webhook route
+  } else {
+    bodyParser.json()(req, res, next);
+    bodyParser.urlencoded({ extended: true })(req, res, next);
+  }
+});
 app.use(morgan('dev'));
 
 // Add API routes

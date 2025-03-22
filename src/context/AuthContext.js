@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { authApi } from '../api/authApi';
+import supabase from '../utils/supabaseClient';
 
 // Create the context
 export const AuthContext = createContext();
@@ -14,43 +15,93 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Check for token on app start
+  // Check for session on app start and set up listener
   useEffect(() => {
-    const loadToken = async () => {
+    const checkSession = async () => {
       try {
-        const token = await SecureStore.getItemAsync('userToken');
-        const userData = await SecureStore.getItemAsync('userData');
+        // Check if we have a stored session
+        const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (token && userData) {
-          const user = JSON.parse(userData);
+        if (error) {
+          console.error('Error checking session:', error);
+          setIsLoading(false);
+          return;
+        }
+        
+        if (session) {
+          // Get user data
+          const { data: { user } } = await supabase.auth.getUser();
+          const userData = {
+            id: user.id,
+            email: user.email,
+            name: user?.user_metadata?.name || '',
+            phone: user?.user_metadata?.phone || '',
+            createdAt: user.created_at,
+          };
+          
+          // Update auth state
           setAuthState({
-            token,
-            user,
+            token: session.access_token,
+            user: userData,
             isAuthenticated: true,
           });
           
-          // Verify the token with the server
-          try {
-            await authApi.verifyToken(token);
-          } catch (error) {
-            // Token is invalid, clear storage
-            await SecureStore.deleteItemAsync('userToken');
-            await SecureStore.deleteItemAsync('userData');
-            setAuthState({
-              token: null,
-              user: null,
-              isAuthenticated: false,
-            });
-          }
+          // Store user data
+          await SecureStore.setItemAsync('userData', JSON.stringify(userData));
         }
       } catch (e) {
-        console.error('Error loading auth token:', e);
+        console.error('Error loading auth session:', e);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadToken();
+    // Set up auth listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event);
+        
+        if (event === 'SIGNED_IN' && session) {
+          // Get user data
+          const { data: { user } } = await supabase.auth.getUser();
+          const userData = {
+            id: user.id,
+            email: user.email,
+            name: user?.user_metadata?.name || '',
+            phone: user?.user_metadata?.phone || '',
+            createdAt: user.created_at,
+          };
+          
+          // Update auth state
+          setAuthState({
+            token: session.access_token,
+            user: userData,
+            isAuthenticated: true,
+          });
+          
+          // Store user data
+          await SecureStore.setItemAsync('userData', JSON.stringify(userData));
+        } else if (event === 'SIGNED_OUT') {
+          // Clear auth state
+          setAuthState({
+            token: null,
+            user: null,
+            isAuthenticated: false,
+          });
+          
+          // Clear stored data
+          await SecureStore.deleteItemAsync('userData');
+        }
+      }
+    );
+
+    // Check session on start
+    checkSession();
+
+    // Cleanup
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   // Sign in
@@ -61,15 +112,10 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await authApi.login(email, password);
       
-      // Store token and user data
-      await SecureStore.setItemAsync('userToken', response.token);
+      // Store user data
       await SecureStore.setItemAsync('userData', JSON.stringify(response.user));
       
-      setAuthState({
-        token: response.token,
-        user: response.user,
-        isAuthenticated: true,
-      });
+      // Auth state will be updated by the listener
     } catch (e) {
       setError(e.message || 'An error occurred during sign in');
       console.error('Sign in error:', e);
@@ -86,15 +132,10 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await authApi.register(name, email, phone, password);
       
-      // Store token and user data
-      await SecureStore.setItemAsync('userToken', response.token);
+      // Store user data
       await SecureStore.setItemAsync('userData', JSON.stringify(response.user));
       
-      setAuthState({
-        token: response.token,
-        user: response.user,
-        isAuthenticated: true,
-      });
+      // Auth state will be updated by the listener
     } catch (e) {
       setError(e.message || 'An error occurred during sign up');
       console.error('Sign up error:', e);
@@ -108,15 +149,10 @@ export const AuthProvider = ({ children }) => {
     setIsLoading(true);
     
     try {
-      // Clear stored data
-      await SecureStore.deleteItemAsync('userToken');
-      await SecureStore.deleteItemAsync('userData');
+      // Sign out with Supabase
+      await authApi.signOut();
       
-      setAuthState({
-        token: null,
-        user: null,
-        isAuthenticated: false,
-      });
+      // Auth state will be updated by the listener
     } catch (e) {
       console.error('Sign out error:', e);
     } finally {

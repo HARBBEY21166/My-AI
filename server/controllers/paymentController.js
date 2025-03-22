@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { users, rides, payments } = require('../utils/inMemoryDb');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // Get saved payment methods
 exports.getPaymentMethods = (req, res) => {
@@ -115,7 +116,58 @@ exports.removePaymentMethod = (req, res) => {
   }
 };
 
-// Process payment for a ride
+// Create a payment intent (Stripe)
+exports.createPaymentIntent = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { rideId } = req.params;
+    const { amount } = req.body;
+
+    // Validate input
+    if (!amount) {
+      return res.status(400).json({ message: 'Amount is required' });
+    }
+
+    // Find the ride
+    const rideIndex = rides.findIndex(ride => ride.rideId === rideId);
+    if (rideIndex === -1) {
+      return res.status(404).json({ message: 'Ride not found' });
+    }
+
+    // Check if the ride belongs to the user
+    if (rides[rideIndex].userId !== userId) {
+      return res.status(403).json({ message: 'Unauthorized' });
+    }
+
+    // Calculate amount in cents for Stripe
+    const amountInCents = Math.round(parseFloat(amount) * 100);
+
+    // Create a payment intent with Stripe
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amountInCents,
+      currency: 'usd',
+      metadata: {
+        userId,
+        rideId,
+      },
+    });
+
+    // Store the payment intent ID in the ride record
+    rides[rideIndex].paymentIntentId = paymentIntent.id;
+    rides[rideIndex].updatedAt = new Date().toISOString();
+
+    // Return the client secret to the client
+    res.json({ 
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id 
+    });
+  } catch (error) {
+    console.error('Create payment intent error:', error);
+    res.status(500).json({ message: 'Error creating payment intent' });
+  }
+};
+
+// Process payment for a ride (for cash or non-Stripe payments)
 exports.processPayment = (req, res) => {
   try {
     const userId = req.user.id;
@@ -174,6 +226,76 @@ exports.processPayment = (req, res) => {
   } catch (error) {
     console.error('Process payment error:', error);
     res.status(500).json({ message: 'Error processing payment' });
+  }
+};
+
+// Handle Stripe webhook
+exports.handleStripeWebhook = async (req, res) => {
+  try {
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    // Verify webhook signature
+    try {
+      // Note: in production you would use a proper webhook secret
+      event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET || 'whsec_test');
+    } catch (err) {
+      console.error('Webhook signature verification failed:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Handle the event
+    switch (event.type) {
+      case 'payment_intent.succeeded':
+        const paymentIntent = event.data.object;
+        const { userId, rideId } = paymentIntent.metadata;
+
+        // Find the ride
+        const rideIndex = rides.findIndex(ride => ride.rideId === rideId);
+        if (rideIndex !== -1) {
+          // Create a new payment record
+          const newPayment = {
+            paymentId: uuidv4(),
+            userId,
+            rideId,
+            amount: paymentIntent.amount / 100, // Convert from cents
+            method: 'card', // Stripe payment is always card
+            status: 'completed',
+            stripePaymentIntentId: paymentIntent.id,
+            createdAt: new Date().toISOString(),
+          };
+
+          // Save the payment
+          payments.push(newPayment);
+
+          // Update the ride status
+          rides[rideIndex].status = 'completed';
+          rides[rideIndex].payment = {
+            paymentId: newPayment.paymentId,
+            amount: newPayment.amount,
+            method: 'card',
+            status: 'completed',
+          };
+          rides[rideIndex].updatedAt = new Date().toISOString();
+        }
+        break;
+      
+      case 'payment_intent.payment_failed':
+        // Handle failed payment
+        const failedPayment = event.data.object;
+        console.log('Payment failed:', failedPayment.id);
+        break;
+      
+      default:
+        // Unexpected event type
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    // Return a response to acknowledge receipt of the event
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Stripe webhook error:', error);
+    res.status(500).json({ message: 'Error handling Stripe webhook' });
   }
 };
 

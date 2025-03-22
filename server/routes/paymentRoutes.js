@@ -4,7 +4,10 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// All routes are protected
+// Stripe webhook endpoint (no auth required)
+router.post('/webhook', express.raw({ type: 'application/json' }), paymentController.handleStripeWebhook);
+
+// All other routes are protected
 router.use(authMiddleware.authenticate);
 
 // Get saved payment methods
@@ -16,7 +19,10 @@ router.post('/methods', paymentController.addPaymentMethod);
 // Remove a payment method
 router.delete('/methods/:paymentMethodId', paymentController.removePaymentMethod);
 
-// Process payment for a ride
+// Create payment intent with Stripe
+router.post('/intent/:rideId', paymentController.createPaymentIntent);
+
+// Process payment for a ride (for cash payments)
 router.post('/:rideId', paymentController.processPayment);
 
 // Get payment history
