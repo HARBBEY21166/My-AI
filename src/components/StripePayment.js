@@ -5,7 +5,9 @@ import { StripeProvider, CardField, useStripe, useConfirmPayment } from '@stripe
 import { API_URL } from '../utils/constants';
 import { paymentApi } from '../api/paymentApi';
 
-const STRIPE_PUBLISHABLE_KEY = process.env.VITE_STRIPE_PUBLIC_KEY;
+// In a real app, use a proper environment variable system compatible with React Native
+// For this demo, we're using the environment variable directly
+const STRIPE_PUBLISHABLE_KEY = process.env.VITE_STRIPE_PUBLIC_KEY || "pk_test_51NHnRlBwLFuTJaxQgIjHOYjt9mT1WpQcYnx7mYDLrTnrCaNshtGyxb6VfbOB5YUZekgcwCqgWn8bklQ3AA5dFjL800cKMioCpG";
 
 const StripePaymentForm = ({ amount, rideId, onSuccess, token }) => {
   const { confirmPayment, loading } = useConfirmPayment();

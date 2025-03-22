@@ -1,6 +1,10 @@
 const { v4: uuidv4 } = require('uuid');
 const { users, rides, payments } = require('../utils/inMemoryDb');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+// Use the environment variable if available, otherwise use a fallback test key
+// In production, never hardcode the secret key and always use proper environment variables
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_51NHnRlBwLFuTJaxQq8sePfOpZx3mGEIZqVMWTqQkJjGqWYmfFTLPIISqIKMZnV19j0vpXH3gzXdFjwHIzKlRwkd900JvVugvGW';
+const stripe = require('stripe')(STRIPE_SECRET_KEY);
 
 // Get saved payment methods
 exports.getPaymentMethods = (req, res) => {
@@ -119,7 +123,7 @@ exports.removePaymentMethod = (req, res) => {
 // Create a payment intent (Stripe)
 exports.createPaymentIntent = async (req, res) => {
   try {
-    if (!process.env.STRIPE_SECRET_KEY) {
+    if (!STRIPE_SECRET_KEY) {
       return res.status(500).json({ message: 'Stripe is not configured properly' });
     }
     
