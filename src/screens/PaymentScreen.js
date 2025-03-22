@@ -401,6 +401,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderRadius: 8,
   },
+  stripeContainer: {
+    padding: 16,
+    marginBottom: 16,
+    borderRadius: 8,
+  },
+  backButton: {
+    marginTop: 16,
+    borderColor: '#4A80F0',
+  },
   payButton: {
     marginTop: 8,
     marginBottom: 24,

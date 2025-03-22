@@ -5,7 +5,7 @@ import { StripeProvider, CardField, useStripe, useConfirmPayment } from '@stripe
 import { API_URL } from '../utils/constants';
 import axios from 'axios';
 
-const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY;
+const STRIPE_PUBLISHABLE_KEY = process.env.VITE_STRIPE_PUBLIC_KEY;
 
 const StripePaymentForm = ({ amount, rideId, onSuccess, token }) => {
   const { confirmPayment, loading } = useConfirmPayment();
