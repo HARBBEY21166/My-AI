@@ -119,6 +119,10 @@ exports.removePaymentMethod = (req, res) => {
 // Create a payment intent (Stripe)
 exports.createPaymentIntent = async (req, res) => {
   try {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.status(500).json({ message: 'Stripe is not configured properly' });
+    }
+    
     const userId = req.user.id;
     const { rideId } = req.params;
     const { amount } = req.body;
@@ -163,7 +167,7 @@ exports.createPaymentIntent = async (req, res) => {
     });
   } catch (error) {
     console.error('Create payment intent error:', error);
-    res.status(500).json({ message: 'Error creating payment intent' });
+    res.status(500).json({ message: error.message || 'Error creating payment intent' });
   }
 };
 

@@ -3,7 +3,7 @@ import { StyleSheet, View, Alert } from 'react-native';
 import { Text, Button } from 'react-native-paper';
 import { StripeProvider, CardField, useStripe, useConfirmPayment } from '@stripe/stripe-react-native';
 import { API_URL } from '../utils/constants';
-import axios from 'axios';
+import { paymentApi } from '../api/paymentApi';
 
 const STRIPE_PUBLISHABLE_KEY = process.env.VITE_STRIPE_PUBLIC_KEY;
 
@@ -20,13 +20,13 @@ const StripePaymentForm = ({ amount, rideId, onSuccess, token }) => {
 
     try {
       // Create a payment intent on the server
-      const response = await axios.post(
-        `${API_URL}/payments/intent/${rideId}`,
-        { amount },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const paymentIntentResponse = await paymentApi.createPaymentIntent(token, rideId, amount);
+      const { clientSecret } = paymentIntentResponse;
       
-      const { clientSecret } = response.data;
+      if (!clientSecret) {
+        Alert.alert('Error', 'Could not create payment. Please try again later.');
+        return;
+      }
       
       // Confirm the payment with the card details
       const { error, paymentIntent } = await confirmPayment(clientSecret, {

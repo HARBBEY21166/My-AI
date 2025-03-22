@@ -40,28 +40,7 @@ export const paymentApi = {
       const response = await paymentInstance.get('/methods', setAuthHeader(token));
       return response.data;
     } catch (error) {
-      console.log('Error getting payment methods, using mock data:', error);
-      // For development purposes, return mock data
-      return [
-        {
-          id: 'card_1',
-          type: 'card',
-          brand: 'visa',
-          last4: '4242',
-          expiryMonth: 12,
-          expiryYear: 2024,
-          isDefault: true,
-        },
-        {
-          id: 'card_2',
-          type: 'card',
-          brand: 'mastercard',
-          last4: '5555',
-          expiryMonth: 10,
-          expiryYear: 2023,
-          isDefault: false,
-        },
-      ];
+      handleApiError(error);
     }
   },
 
@@ -98,16 +77,21 @@ export const paymentApi = {
       );
       return response.data;
     } catch (error) {
-      console.log('Error processing payment, using mock data:', error);
-      // For development purposes, return mock data
-      return {
-        success: true,
-        paymentId: `payment_${Date.now()}`,
-        amount: paymentDetails.amount,
-        method: paymentDetails.method,
-        status: 'completed',
-        timestamp: new Date().toISOString(),
-      };
+      handleApiError(error);
+    }
+  },
+  
+  // Create payment intent with Stripe
+  createPaymentIntent: async (token, rideId, amount) => {
+    try {
+      const response = await paymentInstance.post(
+        `/intent/${rideId}`,
+        { amount },
+        setAuthHeader(token)
+      );
+      return response.data;
+    } catch (error) {
+      handleApiError(error);
     }
   },
 
