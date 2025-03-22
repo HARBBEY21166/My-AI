@@ -205,6 +205,20 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Update onboarding status
+  const updateOnboardingStatus = async (completed) => {
+    try {
+      if (completed) {
+        await AsyncStorage.setItem('onboarding_completed', 'true');
+      } else {
+        await AsyncStorage.removeItem('onboarding_completed');
+      }
+      setOnboardingCompleted(completed);
+    } catch (error) {
+      console.error('Error updating onboarding status:', error);
+    }
+  };
+
   // Provide the auth context value
   const authContext = {
     authState,
@@ -214,6 +228,8 @@ export const AuthProvider = ({ children }) => {
     signUp,
     signOut,
     updateProfile,
+    onboardingCompleted,
+    updateOnboardingStatus,
   };
 
   return (

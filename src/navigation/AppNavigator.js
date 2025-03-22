@@ -16,6 +16,7 @@ import RideInProgressScreen from '../screens/RideInProgressScreen';
 import PaymentScreen from '../screens/PaymentScreen';
 import RideHistoryScreen from '../screens/RideHistoryScreen';
 import RatingScreen from '../screens/RatingScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
 
 // Context
 import { AuthContext } from '../context/AuthContext';
@@ -70,7 +71,7 @@ const MainTabNavigator = () => {
 
 // Root Navigator
 const AppNavigator = () => {
-  const { authState, isLoading } = useContext(AuthContext);
+  const { authState, isLoading, onboardingCompleted } = useContext(AuthContext);
 
   if (isLoading) {
     return (
@@ -83,9 +84,14 @@ const AppNavigator = () => {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {authState.token ? (
+        {!onboardingCompleted ? (
+          // Show onboarding first if not completed
+          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+        ) : authState.token ? (
+          // User is authenticated, show main app
           <Stack.Screen name="Main" component={MainTabNavigator} />
         ) : (
+          // User is not authenticated, show auth screens
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
