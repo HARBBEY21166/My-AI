@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi } from '../api/authApi';
 import supabase from '../utils/supabaseClient';
 
@@ -14,7 +15,24 @@ export const AuthProvider = ({ children }) => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
 
+  // Check if onboarding is completed
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      try {
+        const onboardingStatus = await AsyncStorage.getItem('onboarding_completed');
+        if (onboardingStatus === 'true') {
+          setOnboardingCompleted(true);
+        }
+      } catch (error) {
+        console.error('Error loading onboarding status:', error);
+      }
+    };
+    
+    checkOnboardingStatus();
+  }, []);
+  
   // Check for session on app start and set up listener
   useEffect(() => {
     const checkSession = async () => {
