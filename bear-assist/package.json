@@ -1,5 +1,5 @@
 {
-  "name": "uride",
+  "name": "bear-assist",
   "version": "0.1.0",
   "main": "index.ts",
   "scripts": {
@@ -21,6 +21,7 @@
     "expo-camera": "latest",
     "expo-clipboard": "latest",
     "expo-linear-gradient": "latest",
+    "expo-module-scripts": "^4.0.4",
     "expo-status-bar": "~2.0.1",
     "lucide-react-native": "latest",
     "react": "18.3.1",

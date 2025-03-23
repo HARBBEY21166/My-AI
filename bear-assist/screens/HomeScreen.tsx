@@ -20,9 +20,10 @@ import { toast } from 'sonner-native';
 interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
+  timestamp?: string; // Added timestamp for messages
 }
 
-const SYSTEM_MESSAGE = {
+const SYSTEM_MESSAGE: Message = {
   role: 'system',
   content: `You are an expert programming assistant. When providing code solutions:
 - Write clean, well-commented code
@@ -42,6 +43,7 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const maxInputLength = 1000; // Maximum input length
 
   const copyToClipboard = async (text: string) => {
     await Clipboard.setStringAsync(text);
@@ -49,11 +51,9 @@ export default function ChatScreen() {
   };
 
   const formatMessage = (content: string) => {
-    // Split message into parts based on code blocks
     const parts = content.split(/(```[\s\S]*?```)/g);
     return parts.map((part, index) => {
       if (part.startsWith('```')) {
-        // Remove ``` markers and language identifier
         const code = part.replace(/```(\w+)?\n?/g, '').replace(/```$/, '');
         return (
           <View key={index} style={styles.codeBlock}>
@@ -74,7 +74,11 @@ export default function ChatScreen() {
   const sendMessage = async () => {
     if (!inputText.trim()) return;
 
-    const userMessage = { role: 'user', content: inputText.trim() };
+    const userMessage: Message = { 
+      role: 'user', 
+      content: inputText.trim(),
+      timestamp: new Date().toLocaleTimeString() // Add timestamp
+    };
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
     setIsLoading(true);
@@ -91,7 +95,12 @@ export default function ChatScreen() {
       });
 
       const data = await response.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.completion }]);
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: data.completion,
+        timestamp: new Date().toLocaleTimeString() // Add timestamp
+      };
+      setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       toast.error('Failed to get response. Please try again.');
     } finally {
@@ -121,6 +130,7 @@ export default function ChatScreen() {
             ]}
           >
             {formatMessage(message.content)}
+            <Text style={styles.timestamp}>{message.timestamp}</Text> {/* Display timestamp */}
           </Animated.View>
         ))}
         {isLoading && (
@@ -142,8 +152,9 @@ export default function ChatScreen() {
             placeholder="Describe your coding problem..."
             placeholderTextColor="#666"
             multiline
-            maxLength={1000}
+            maxLength={maxInputLength}
           />
+          <Text style={styles.charCount}>{`${inputText.length}/${maxInputLength}`}</Text> {/* Character count */}
           <TouchableOpacity
             style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
             onPress={sendMessage}
@@ -204,6 +215,12 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: '#fff',
   },
+  timestamp: {
+    fontSize: 12,
+    color: '#aaa',
+    marginTop: 4,
+    alignSelf: 'flex-end',
+  },
   codeBlock: {
     backgroundColor: '#1E1E1E',
     padding: 12,
@@ -242,6 +259,11 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     fontSize: 16,
     color: '#fff',
+  },
+  charCount: {
+    color: '#666',
+    marginRight: 8,
+    alignSelf: 'flex-end',
   },
   sendButton: {
     width: 44,
