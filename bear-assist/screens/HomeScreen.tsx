@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -41,16 +41,16 @@ const isCodeBlock = (text: string) => {
 };
 
 export default function ChatScreen() {
-  const [messages, setMessages] = useState<Message[]>([SYSTEM_MESSAGE]);
-  const [inputText, setInputText] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [chatHistory, setChatHistory] = useState<Message[][]>([]);
-  const [showHistory, setShowHistory] = useState<boolean>(false);
+  const [messages, setMessages] = React.useState<Message[]>([SYSTEM_MESSAGE]);
+  const [inputText, setInputText] = React.useState<string>('');
+  const [isLoading, setIsLoading] = React.useState<boolean>(false);
+  const [chatHistory, setChatHistory] = React.useState<Message[][]>([]);
+  const [showHistory, setShowHistory] = React.useState<boolean>(false);
+  const [searchText, setSearchText] = React.useState<string>('');
   const scrollViewRef = useRef<ScrollView>(null);
   const maxInputLength = 1000;
 
   useEffect(() => {
-    // Load chat history from AsyncStorage when the component mounts
     const loadChatHistory = async () => {
       try {
         const storedHistory = await AsyncStorage.getItem('chatHistory');
@@ -122,18 +122,16 @@ export default function ChatScreen() {
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
-      toast.error('Failed to get response. Please try again.');
+      toast.error('Failed to get response. Please try again');
     } finally {
       setIsLoading(false);
     }
   };
 
   const startNewChat = async () => {
-    // Save current chat to history
     const updatedHistory = [...chatHistory, messages];
     setChatHistory(updatedHistory);
-    await AsyncStorage.setItem( 'chatHistory', JSON.stringify(updatedHistory)); // Save to AsyncStorage
-    // Reset messages for new chat
+    await AsyncStorage.setItem('chatHistory', JSON.stringify(updatedHistory));
     setMessages([SYSTEM_MESSAGE]);
   };
 
@@ -146,10 +144,27 @@ export default function ChatScreen() {
     setShowHistory(false);
   };
 
+  const deleteChatFromHistory = async (index: number) => {
+    const updatedHistory = chatHistory.filter((_, i) => i !== index);
+    setChatHistory(updatedHistory);
+    await AsyncStorage.setItem('chatHistory', JSON.stringify(updatedHistory));
+    toast.success('Chat deleted successfully!');
+  };
+
+  const clearChatHistory = async () => {
+    setChatHistory([]);
+    await AsyncStorage.removeItem('chatHistory');
+    toast.success('Chat history cleared!');
+  };
+
+  const filteredChatHistory = chatHistory.filter(chat => 
+    chat.some(message => message.content.toLowerCase().includes(searchText.toLowerCase()))
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>AI Code Assistant</Text>
+        <Text style={styles.headerTitle}>Bear Code Assistant</Text>
         <TouchableOpacity onPress={toggleHistory} style={styles.historyButton}>
           <Text style={styles.historyButtonText}>History</Text>
         </TouchableOpacity>
@@ -222,19 +237,36 @@ export default function ChatScreen() {
               <Ionicons name="close" size={24} color="#fff" />
             </TouchableOpacity>
           </View>
+          <TextInput
+            style={styles.searchInput}
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder="Search chats..."
+            placeholderTextColor="#666"
+          />
           <ScrollView>
-            {chatHistory.map((chat, index) => (
-              <TouchableOpacity key={index} onPress={() => selectChatFromHistory(chat)}>
-                <View style={styles.historyChat}>
-                  {chat.map((message, msgIndex) => (
-                    <Text key={msgIndex} style={styles.historyMessage}>
-                      {`${message.role}: ${message.content}`}
-                    </Text>
-                  ))}
+            {filteredChatHistory.length === 0 ? (
+              <Text style={styles.noHistoryText}>No chats found.</Text>
+            ) : (
+              filteredChatHistory.map((chat, index) => (
+                <View key={index} style={styles.historyChat}>
+                  <TouchableOpacity onPress={() => selectChatFromHistory(chat)}>
+                    {chat.map((message, msgIndex) => (
+                      <Text key={msgIndex} style={styles.historyMessage}>
+                        {`${message.role}: ${message.content}`}
+                      </Text>
+                    ))}
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => deleteChatFromHistory(index)} style={styles.deleteButton}>
+                    <Ionicons name="trash" size={20} color="#FF3B30" />
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
-            ))}
+              ))
+            )}
           </ScrollView>
+          <TouchableOpacity onPress={clearChatHistory} style={styles.clearHistoryButton}>
+            <Text style={styles.clearHistoryText}>Clear All History</Text>
+          </TouchableOpacity>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -376,14 +408,45 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
   },
+  searchInput: {
+    backgroundColor: '#252526',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 16,
+    color: '#fff',
+  },
+  noHistoryText: {
+    color: '#fff',
+    textAlign: 'center',
+    marginTop: 20,
+  },
   historyChat: {
     marginBottom: 16,
     padding: 10,
     backgroundColor: '#252526',
     borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   historyMessage: {
     color: '#fff',
     marginBottom: 4,
+    flex: 1,
+  },
+  deleteButton: {
+    padding: 5,
+  },
+  clearHistoryButton: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 20,
+    padding: 10,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  clearHistoryText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });
