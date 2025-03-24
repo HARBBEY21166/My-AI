@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import * as React from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,18 +10,19 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Pressable,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import * as Clipboard from 'expo-clipboard';
 import { toast } from 'sonner-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
-  timestamp?: string; // Added timestamp for messages
+  timestamp?: string;
 }
 
 const SYSTEM_MESSAGE: Message = {
@@ -40,10 +42,28 @@ const isCodeBlock = (text: string) => {
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([SYSTEM_MESSAGE]);
-  const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [inputText, setInputText] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [chatHistory, setChatHistory] = useState<Message[][]>([]);
+  const [showHistory, setShowHistory] = useState<boolean>(false);
   const scrollViewRef = useRef<ScrollView>(null);
-  const maxInputLength = 1000; // Maximum input length
+  const maxInputLength = 1000;
+
+  useEffect(() => {
+    // Load chat history from AsyncStorage when the component mounts
+    const loadChatHistory = async () => {
+      try {
+        const storedHistory = await AsyncStorage.getItem('chatHistory');
+        if (storedHistory) {
+          setChatHistory(JSON.parse(storedHistory));
+        }
+      } catch (error) {
+        console.error('Failed to load chat history:', error);
+      }
+    };
+
+    loadChatHistory();
+  }, []);
 
   const copyToClipboard = async (text: string) => {
     await Clipboard.setStringAsync(text);
@@ -77,7 +97,7 @@ export default function ChatScreen() {
     const userMessage: Message = { 
       role: 'user', 
       content: inputText.trim(),
-      timestamp: new Date().toLocaleTimeString() // Add timestamp
+      timestamp: new Date().toLocaleTimeString()
     };
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
@@ -98,7 +118,7 @@ export default function ChatScreen() {
       const assistantMessage: Message = {
         role: 'assistant',
         content: data.completion,
-        timestamp: new Date().toLocaleTimeString() // Add timestamp
+        timestamp: new Date().toLocaleTimeString()
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
@@ -108,10 +128,34 @@ export default function ChatScreen() {
     }
   };
 
+  const startNewChat = async () => {
+    // Save current chat to history
+    const updatedHistory = [...chatHistory, messages];
+    setChatHistory(updatedHistory);
+    await AsyncStorage.setItem( 'chatHistory', JSON.stringify(updatedHistory)); // Save to AsyncStorage
+    // Reset messages for new chat
+    setMessages([SYSTEM_MESSAGE]);
+  };
+
+  const toggleHistory = () => {
+    setShowHistory(!showHistory);
+  };
+
+  const selectChatFromHistory = (chat: Message[]) => {
+    setMessages(chat);
+    setShowHistory(false);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>AI Code Assistant</Text>
+        <TouchableOpacity onPress={toggleHistory} style={styles.historyButton}>
+          <Text style={styles.historyButtonText}>History</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={startNewChat} style={styles.newChatButton}>
+          <Text style={styles.newChatButtonText}>New Chat</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -130,7 +174,7 @@ export default function ChatScreen() {
             ]}
           >
             {formatMessage(message.content)}
-            <Text style={styles.timestamp}>{message.timestamp}</Text> {/* Display timestamp */}
+            <Text style={styles.timestamp}>{message.timestamp}</Text>
           </Animated.View>
         ))}
         {isLoading && (
@@ -154,7 +198,7 @@ export default function ChatScreen() {
             multiline
             maxLength={maxInputLength}
           />
-          <Text style={styles.charCount}>{`${inputText.length}/${maxInputLength}`}</Text> {/* Character count */}
+          <Text style={styles.charCount}>{`${inputText.length}/${maxInputLength}`}</Text>
           <TouchableOpacity
             style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
             onPress={sendMessage}
@@ -168,6 +212,31 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Chat History Modal */}
+      <Modal visible={showHistory} animationType="slide">
+        <SafeAreaView style={styles.historyContainer}>
+          <View style={styles.historyHeader}>
+            <Text style={styles.historyTitle}>Chat History</Text>
+            <TouchableOpacity onPress={toggleHistory}>
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView>
+            {chatHistory.map((chat, index) => (
+              <TouchableOpacity key={index} onPress={() => selectChatFromHistory(chat)}>
+                <View style={styles.historyChat}>
+                  {chat.map((message, msgIndex) => (
+                    <Text key={msgIndex} style={styles.historyMessage}>
+                      {`${message.role}: ${message.content}`}
+                    </Text>
+                  ))}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -182,11 +251,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#252526',
     borderBottomWidth: 1,
     borderBottomColor: '#333',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  historyButton: {
+    marginLeft: 10,
+  },
+  historyButtonText: {
+    color: '#007AFF',
+  },
+  newChatButton: {
+    marginLeft: 10,
+  },
+  newChatButtonText: {
+    color: '#FF3B30',
   },
   messagesContainer: {
     flex: 1,
@@ -275,5 +359,31 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     opacity: 0.5,
+  },
+  historyContainer: {
+    flex: 1,
+    backgroundColor: '#1E1E1E',
+    padding: 16,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  historyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  historyChat: {
+    marginBottom: 16,
+    padding: 10,
+    backgroundColor: '#252526',
+    borderRadius: 8,
+  },
+  historyMessage: {
+    color: '#fff',
+    marginBottom: 4,
   },
 });
